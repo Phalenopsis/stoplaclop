@@ -17,7 +17,7 @@ public class Smoked {
 
   private LocalDateTime date;
 
-  public Smoked() { }
+  public Smoked() {}
 
   public Smoked(AuthenticatedUser user, LocalDateTime date) {
     this.user = user;

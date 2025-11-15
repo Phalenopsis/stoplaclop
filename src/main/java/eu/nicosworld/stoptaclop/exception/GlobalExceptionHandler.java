@@ -23,6 +23,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(TooManySmokesException.class)
   public ResponseEntity<Map<String, String>> handleTooManySmokes(TooManySmokesException ex) {
-    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", ex.getMessage()));
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .body(Map.of("error", ex.getMessage()));
   }
 }

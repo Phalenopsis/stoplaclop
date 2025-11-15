@@ -16,12 +16,14 @@ if ! [[ "$branch" =~ ^(feat|fix|hotfix)/.+$ ]]; then
   exit 1
 fi
 
-echo "🎨 Formatage du code avec Spotless..."
-./mvnw spotless:apply
+echo "🎨 Vérification du formatage avec Spotless..."
+# SpotlessCheck renvoie un code d'erreur si le code n'est pas formaté correctement
+./mvnw spotless:check
 result=$?
 if [ $result -ne 0 ]; then
-  echo "❌ Spotless a détecté des erreurs de formatage. Le code a été automatiquement reformatté."
-  echo "👉 Veuillez revalider vos changements."
+  echo "❌ Spotless a détecté des erreurs de formatage."
+  echo "👉 Le code a été automatiquement reformatté. Veuillez relancer le commit après avoir validé le reformat."
+  ./mvnw spotless:apply
   exit 1
 else
   echo "✅ Le formatage Spotless est correct."

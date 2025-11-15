@@ -3,23 +3,22 @@ package eu.nicosworld.stoptaclop.infrastructure.web.controller;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
+import java.time.LocalDateTime;
+
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import eu.nicosworld.stoptaclop.AbstractE2ETest;
 import eu.nicosworld.stoptaclop.authentication.UserRepository;
 import eu.nicosworld.stoptaclop.authentication.model.User;
+import eu.nicosworld.stoptaclop.authentication.model.UserLoginDTO;
+import eu.nicosworld.stoptaclop.authentication.model.UserRegistrationDTO;
 import eu.nicosworld.stoptaclop.domain.authenticatedUser.AuthenticatedUserService;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.AuthenticatedUser;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.Smoked;
-import org.junit.jupiter.api.*;
-
-import eu.nicosworld.stoptaclop.AbstractE2ETest;
-import eu.nicosworld.stoptaclop.authentication.model.UserLoginDTO;
-import eu.nicosworld.stoptaclop.authentication.model.UserRegistrationDTO;
+import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import org.springframework.beans.factory.annotation.Autowired;
-
-import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
-
-import java.time.LocalDateTime;
 
 class SmokedControllerE2ETest extends AbstractE2ETest {
 
@@ -125,7 +124,6 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
     smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusHours(1)));
     smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusDays(1)));
 
-
     given()
         .header("Authorization", "Bearer " + token)
         .when()
@@ -159,19 +157,19 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
 
     // Première cigarette - OK
     given()
-            .header("Authorization", "Bearer " + token)
-            .when()
-            .post("/smoked")
-            .then()
-            .statusCode(200);
+        .header("Authorization", "Bearer " + token)
+        .when()
+        .post("/smoked")
+        .then()
+        .statusCode(200);
 
     // Deuxième cigarette immédiatement après - doit renvoyer 429
     given()
-            .header("Authorization", "Bearer " + token)
-            .when()
-            .post("/smoked")
-            .then()
-            .statusCode(429)
-            .body("error", equalTo("Vous ne pouvez pas fumer plus d'une fois par minute"));
+        .header("Authorization", "Bearer " + token)
+        .when()
+        .post("/smoked")
+        .then()
+        .statusCode(429)
+        .body("error", equalTo("Vous ne pouvez pas fumer plus d'une fois par minute"));
   }
 }

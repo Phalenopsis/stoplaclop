@@ -3,11 +3,11 @@ package eu.nicosworld.stoptaclop.domain.smoked;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
-import eu.nicosworld.stoptaclop.exception.TooManySmokesException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import eu.nicosworld.stoptaclop.domain.authenticatedUser.AuthenticatedUserService;
+import eu.nicosworld.stoptaclop.exception.TooManySmokesException;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.AuthenticatedUser;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.Smoked;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
@@ -26,7 +26,8 @@ public class SmokeService {
   public void smokeACigarette(UserDetails user) {
     AuthenticatedUser authenticatedUser = authenticatedUserService.findByUser(user);
 
-    LocalDateTime lastSmokeDate = smokeRepository
+    LocalDateTime lastSmokeDate =
+        smokeRepository
             .findTopByUserOrderByDateDesc(authenticatedUser)
             .map(Smoked::getDate)
             .orElse(null);
