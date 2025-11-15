@@ -1,6 +1,6 @@
-# spring_auth_stateless_template
+# stoplaclop
 
-Template for authentication stateless with SpringBoot
+Tobacco consumption tracking tool
 
 ## TASK AFTER CLONE
 Launch ```sh setup-hooks.sh``` to set up git hooks.
@@ -10,11 +10,15 @@ Launch ```sh setup-hooks.sh``` to set up git hooks.
 * Registration
 * Login (with JWT and HttpOnly Cookie sent to front-end)
 * Refresh token ()
+* Tobacco consumption tracking
 
 ### Routes
-- /auth/register
-- /auth/login
-- /auth/refresh
+- POST /auth/register
+- POST /auth/login
+- POST /auth/refresh
+- POST /logout
+- GET /smoked
+- POST /smoked
 
 ### Todo List
 * forgotten-password
