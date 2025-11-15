@@ -22,14 +22,11 @@ import io.restassured.response.Response;
 
 class SmokedControllerE2ETest extends AbstractE2ETest {
 
-  @Autowired
-  AuthenticatedUserService authenticatedUserService;
+  @Autowired AuthenticatedUserService authenticatedUserService;
 
-  @Autowired
-  UserRepository userRepository;
+  @Autowired UserRepository userRepository;
 
-  @Autowired
-  SmokedRepository smokedRepository;
+  @Autowired SmokedRepository smokedRepository;
 
   /** Inscription + login → retourne accessToken */
   private String getAccessToken(String email, String password) {
