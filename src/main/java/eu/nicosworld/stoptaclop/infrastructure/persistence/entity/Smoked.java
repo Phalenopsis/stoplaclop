@@ -17,6 +17,13 @@ public class Smoked {
 
   private LocalDateTime date;
 
+  public Smoked() { }
+
+  public Smoked(AuthenticatedUser user, LocalDateTime date) {
+    this.user = user;
+    this.date = date;
+  }
+
   public Long getId() {
     return id;
   }

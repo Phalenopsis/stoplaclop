@@ -20,4 +20,9 @@ public class GlobalExceptionHandler {
   public ResponseEntity<Map<String, String>> handleBadCredentials(EmailAlreadyUsed ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
   }
+
+  @ExceptionHandler(TooManySmokesException.class)
+  public ResponseEntity<Map<String, String>> handleTooManySmokes(TooManySmokesException ex) {
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", ex.getMessage()));
+  }
 }

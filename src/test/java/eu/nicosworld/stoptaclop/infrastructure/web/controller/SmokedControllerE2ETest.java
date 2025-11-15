@@ -3,6 +3,11 @@ package eu.nicosworld.stoptaclop.infrastructure.web.controller;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
+import eu.nicosworld.stoptaclop.authentication.UserRepository;
+import eu.nicosworld.stoptaclop.authentication.model.User;
+import eu.nicosworld.stoptaclop.domain.authenticatedUser.AuthenticatedUserService;
+import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.AuthenticatedUser;
+import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.Smoked;
 import org.junit.jupiter.api.*;
 
 import eu.nicosworld.stoptaclop.AbstractE2ETest;
@@ -10,8 +15,22 @@ import eu.nicosworld.stoptaclop.authentication.model.UserLoginDTO;
 import eu.nicosworld.stoptaclop.authentication.model.UserRegistrationDTO;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
+
+import java.time.LocalDateTime;
 
 class SmokedControllerE2ETest extends AbstractE2ETest {
+
+  @Autowired
+  AuthenticatedUserService authenticatedUserService;
+
+  @Autowired
+  UserRepository userRepository;
+
+  @Autowired
+  SmokedRepository smokedRepository;
 
   /** Inscription + login → retourne accessToken */
   private String getAccessToken(String email, String password) {
@@ -99,25 +118,23 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
     String password = "password123";
 
     String token = getAccessToken(email, password);
+    User user = userRepository.findByEmail(email).orElseThrow();
 
-    for (int i = 0; i < 3; i++) {
-      given()
-          .header("Authorization", "Bearer " + token)
-          .when()
-          .post("/smoked")
-          .then()
-          .statusCode(200);
-    }
+    AuthenticatedUser authenticatedUser = authenticatedUserService.findByUser(user);
+
+    smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusHours(1)));
+    smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusDays(1)));
+
 
     given()
         .header("Authorization", "Bearer " + token)
         .when()
-        .get("/smoked")
+        .post("/smoked")
         .then()
         .statusCode(200)
-        .body("smokedToday", equalTo(3))
+        .body("smokedToday", equalTo(2))
         .body("totalSmoked", equalTo(3))
-        .body("smokedLastWeek", hasSize(1)); // 1 entrée pour aujourd'hui
+        .body("smokedLastWeek", hasSize(2));
   }
 
   @Test
@@ -130,5 +147,31 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
   @DisplayName("POST /smoked - doit renvoyer 401 si non authentifié")
   void postSmoked_unauthorized() {
     given().when().post("/smoked").then().statusCode(401);
+  }
+
+  @Test
+  @DisplayName("POST /smoked - bloque si tentative de fumer 2 fois en moins d'une minute")
+  void smokeTwiceWithinOneMinute_returns429() {
+    String email = "testsmokeratelimit@example.com";
+    String password = "password123";
+
+    String token = getAccessToken(email, password);
+
+    // Première cigarette - OK
+    given()
+            .header("Authorization", "Bearer " + token)
+            .when()
+            .post("/smoked")
+            .then()
+            .statusCode(200);
+
+    // Deuxième cigarette immédiatement après - doit renvoyer 429
+    given()
+            .header("Authorization", "Bearer " + token)
+            .when()
+            .post("/smoked")
+            .then()
+            .statusCode(429)
+            .body("error", equalTo("Vous ne pouvez pas fumer plus d'une fois par minute"));
   }
 }

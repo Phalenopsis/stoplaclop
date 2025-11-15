@@ -1,7 +1,9 @@
 package eu.nicosworld.stoptaclop.domain.smoked;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
+import eu.nicosworld.stoptaclop.exception.TooManySmokesException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +25,19 @@ public class SmokeService {
 
   public void smokeACigarette(UserDetails user) {
     AuthenticatedUser authenticatedUser = authenticatedUserService.findByUser(user);
+
+    LocalDateTime lastSmokeDate = smokeRepository
+            .findTopByUserOrderByDateDesc(authenticatedUser)
+            .map(Smoked::getDate)
+            .orElse(null);
+
+    if (lastSmokeDate != null) {
+      Duration sinceLastSmoke = Duration.between(lastSmokeDate, LocalDateTime.now());
+      if (sinceLastSmoke.toSeconds() < 60) {
+        throw new TooManySmokesException();
+      }
+    }
+
     Smoked smoked = new Smoked();
     smoked.setUser(authenticatedUser);
     smoked.setDate(LocalDateTime.now());
