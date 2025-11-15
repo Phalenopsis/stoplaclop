@@ -1,4 +1,15 @@
+# Scripts et hooks déjà présents
 /mvnw text eol=lf
 *.cmd text eol=crlf
 *.sh text eol=lf
 git-hooks/* text eol=lf
+
+# Fichiers source Java
+*.java text eol=lf
+
+# Fichiers de configuration Spring Boot
+*.yml text eol=lf
+*.properties text eol=lf
+
+# Tests
+src/test/resources/* text eol=lf

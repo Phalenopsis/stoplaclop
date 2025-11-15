@@ -9,6 +9,24 @@ if [[ "$branch" == "main" || "$branch" == "dev" ]]; then
   exit 1
 fi
 
+# Vérification du nom de branche
+if ! [[ "$branch" =~ ^(feat|fix|hotfix)/.+$ ]]; then
+  echo "❌ Nom de branche invalide : '$branch'."
+  echo "👉 Seules les branches feat/, fix/, hotfix/ sont autorisées."
+  exit 1
+fi
+
+echo "🎨 Formatage du code avec Spotless..."
+./mvnw spotless:apply
+result=$?
+if [ $result -ne 0 ]; then
+  echo "❌ Spotless a détecté des erreurs de formatage. Le code a été automatiquement reformatté."
+  echo "👉 Veuillez revalider vos changements."
+  exit 1
+else
+  echo "✅ Le formatage Spotless est correct."
+fi
+
 echo "🔍 Lancement des tests unitaires et d'intégration..."
 export MAVEN_OPTS="-Dfile.encoding=UTF-8"
 ./mvnw test -Dtest='*Test,!*E2ETest'
@@ -20,4 +38,5 @@ if [ $result -ne 0 ]; then
 else
   echo "✅ Tous les tests unitaires et d'intégration sont passés !"
 fi
+
 exit 0
