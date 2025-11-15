@@ -18,7 +18,7 @@ import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.AuthenticatedU
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.Smoked;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
+import io.restassured.specification.RequestSpecification;
 
 class SmokedControllerE2ETest extends AbstractE2ETest {
 
@@ -28,145 +28,147 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
 
   @Autowired SmokedRepository smokedRepository;
 
+  private String token;
+  private String testEmail;
+  private final String testPassword = "password123";
+
+  /** Génère un email unique pour chaque test */
+  private String generateRandomEmail() {
+    return "test+" + System.currentTimeMillis() + "@example.com";
+  }
+
   /** Inscription + login → retourne accessToken */
   private String getAccessToken(String email, String password) {
-    // register
+    // Inscription
+    UserRegistrationDTO registrationDto = new UserRegistrationDTO();
+    registrationDto.setEmail(email);
+    registrationDto.setPassword(password);
+
     given()
         .contentType(ContentType.JSON)
-        .body(
-            new UserRegistrationDTO() {
-              {
-                setEmail(email);
-                setPassword(password);
-              }
-            })
+        .body(registrationDto)
         .when()
         .post("/auth/register")
         .then()
         .statusCode(201);
 
-    // login
+    // Login
     UserLoginDTO loginDto = new UserLoginDTO();
     loginDto.setEmail(email);
     loginDto.setPassword(password);
 
-    Response loginResponse =
-        given()
-            .contentType(ContentType.JSON)
-            .body(loginDto)
-            .when()
-            .post("/auth/login")
-            .then()
-            .statusCode(200)
-            .extract()
-            .response();
+    return given()
+        .contentType(ContentType.JSON)
+        .body(loginDto)
+        .when()
+        .post("/auth/login")
+        .then()
+        .statusCode(200)
+        .extract()
+        .path("accessToken");
+  }
 
-    return loginResponse.jsonPath().getString("accessToken");
+  /** Avant chaque test : vide la base et crée un utilisateur */
+  @BeforeEach
+  void setup() {
+    smokedRepository.deleteAll();
+    testEmail = generateRandomEmail();
+    token = getAccessToken(testEmail, testPassword);
+  }
+
+  /** Retourne un RequestSpecification avec le token déjà appliqué */
+  private RequestSpecification auth() {
+    return given().header("Authorization", "Bearer " + token);
   }
 
   // -------------------------------------------------------
-  //                  TESTS
+  //             Tests pour utilisateur authentifié
   // -------------------------------------------------------
+  @Nested
+  @DisplayName("Quand l'utilisateur est authentifié")
+  class AuthenticatedTests {
 
-  @Test
-  @DisplayName("GET /smoked - retourne les stats initiales d'un utilisateur")
-  void getSmoked_initialStats() {
-    String email = "testsmokegetinitialstats@example.com";
-    String password = "password123";
+    @Test
+    @DisplayName("GET /smoked retourne les stats initiales")
+    void getSmoked_initialStats() {
+      auth()
+          .when()
+          .get("/smoked")
+          .then()
+          .statusCode(200)
+          .body("smokedToday", equalTo(0))
+          .body("totalSmoked", equalTo(0))
+          .body("smokedLastWeek", hasSize(0));
+    }
 
-    String token = getAccessToken(email, password);
+    @Test
+    @DisplayName("POST /smoked enregistre une cigarette")
+    void smokeOnce_updatesStats() {
+      auth()
+          .when()
+          .post("/smoked")
+          .then()
+          .statusCode(200)
+          .body("smokedToday", equalTo(1))
+          .body("totalSmoked", equalTo(1))
+          .body("smokedLastWeek", hasSize(1));
+    }
 
-    given()
-        .header("Authorization", "Bearer " + token)
-        .when()
-        .get("/smoked")
-        .then()
-        .statusCode(200)
-        .body("smokedToday", equalTo(0))
-        .body("totalSmoked", equalTo(0))
-        .body("smokedLastWeek", hasSize(0));
+    @Test
+    @DisplayName("POST /smoked x3 incrémente correctement le total")
+    void smokeThreeTimes() {
+      User user = userRepository.findByEmail(testEmail).orElseThrow();
+      AuthenticatedUser authenticatedUser = authenticatedUserService.findByUser(user);
+
+      // Historique en base : 1 cigarette hier et 1 il y a 1h
+      smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusHours(1)));
+      smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusDays(1)));
+
+      auth()
+          .when()
+          .post("/smoked")
+          .then()
+          .statusCode(200)
+          .body("smokedToday", equalTo(2))
+          .body("totalSmoked", equalTo(3))
+          .body(
+              "smokedLastWeek.day",
+              containsInAnyOrder(
+                  LocalDateTime.now().minusDays(1).toLocalDate().toString(),
+                  LocalDateTime.now().toLocalDate().toString()));
+    }
+
+    @Test
+    @DisplayName("POST /smoked limite à 1 cigarette par minute")
+    void smokeTwiceWithinOneMinute_returns429() {
+      auth().when().post("/smoked").then().statusCode(200);
+
+      auth()
+          .when()
+          .post("/smoked")
+          .then()
+          .statusCode(429)
+          .body("error", equalTo("Vous ne pouvez pas fumer plus d'une fois par minute"));
+    }
   }
 
-  @Test
-  @DisplayName("POST /smoked - enregistre une cigarette et met à jour les stats")
-  void smokeOnce_updatesStats() {
-    String email = "testsmokepostone@example.com";
-    String password = "password123";
+  // -------------------------------------------------------
+  //             Tests pour utilisateur non authentifié
+  // -------------------------------------------------------
+  @Nested
+  @DisplayName("Quand l'utilisateur n'est pas authentifié")
+  class UnauthorizedTests {
 
-    String token = getAccessToken(email, password);
+    @Test
+    @DisplayName("GET /smoked retourne 401")
+    void getSmoked_unauthorized() {
+      given().when().get("/smoked").then().statusCode(401);
+    }
 
-    // Smoker une cigarette
-    given()
-        .header("Authorization", "Bearer " + token)
-        .when()
-        .post("/smoked")
-        .then()
-        .statusCode(200)
-        .body("smokedToday", equalTo(1))
-        .body("totalSmoked", equalTo(1))
-        .body("smokedLastWeek", hasSize(1));
-  }
-
-  @Test
-  @DisplayName("POST /smoked x3 - incrémente correctement le total et le total du jour")
-  void smokeThreeTimes() {
-    String email = "testsmokepostthree@example.com";
-    String password = "password123";
-
-    String token = getAccessToken(email, password);
-    User user = userRepository.findByEmail(email).orElseThrow();
-
-    AuthenticatedUser authenticatedUser = authenticatedUserService.findByUser(user);
-
-    smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusHours(1)));
-    smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusDays(1)));
-
-    given()
-        .header("Authorization", "Bearer " + token)
-        .when()
-        .post("/smoked")
-        .then()
-        .statusCode(200)
-        .body("smokedToday", equalTo(2))
-        .body("totalSmoked", equalTo(3))
-        .body("smokedLastWeek", hasSize(2));
-  }
-
-  @Test
-  @DisplayName("GET /smoked - doit renvoyer 401 si non authentifié")
-  void getSmoked_unauthorized() {
-    given().when().get("/smoked").then().statusCode(401);
-  }
-
-  @Test
-  @DisplayName("POST /smoked - doit renvoyer 401 si non authentifié")
-  void postSmoked_unauthorized() {
-    given().when().post("/smoked").then().statusCode(401);
-  }
-
-  @Test
-  @DisplayName("POST /smoked - bloque si tentative de fumer 2 fois en moins d'une minute")
-  void smokeTwiceWithinOneMinute_returns429() {
-    String email = "testsmokeratelimit@example.com";
-    String password = "password123";
-
-    String token = getAccessToken(email, password);
-
-    // Première cigarette - OK
-    given()
-        .header("Authorization", "Bearer " + token)
-        .when()
-        .post("/smoked")
-        .then()
-        .statusCode(200);
-
-    // Deuxième cigarette immédiatement après - doit renvoyer 429
-    given()
-        .header("Authorization", "Bearer " + token)
-        .when()
-        .post("/smoked")
-        .then()
-        .statusCode(429)
-        .body("error", equalTo("Vous ne pouvez pas fumer plus d'une fois par minute"));
+    @Test
+    @DisplayName("POST /smoked retourne 401")
+    void postSmoked_unauthorized() {
+      given().when().post("/smoked").then().statusCode(401);
+    }
   }
 }
