@@ -47,9 +47,9 @@ jobs:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/testcontainers
-          key: ${{ runner.os }}-unit-maven-${{ hashFiles('**/pom.xml') }}
+          key: unit-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-unit-maven-
+            unit-maven-
 
       - run: chmod +x ./mvnw
 
@@ -66,7 +66,7 @@ jobs:
 
       - run: ./mvnw clean verify -B -V -DskipITs
 
-      - name: Upload Surefire (TU) results
+      - name: Upload Surefire (unit test) results
         uses: actions/upload-artifact@v4
         with:
           name: surefire-test-results
@@ -103,9 +103,9 @@ jobs:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/testcontainers
-          key: ${{ runner.os }}-integration-maven-${{ hashFiles('**/pom.xml') }}
+          key: integration-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-integration-maven-
+            integration-maven-
 
       - run: chmod +x ./mvnw
 
@@ -120,9 +120,9 @@ jobs:
             sleep 1
           done
 
-      - run: ./mvnw clean verify -B -V -DskipTests -DfailIfNoTests=false
+      - run: ./mvnw clean verify -B -V -DskipUnitTests -DfailIfNoTests=false
 
-      - name: Upload Failsafe (TI) results
+      - name: Upload Failsafe (integration test) results
         uses: actions/upload-artifact@v4
         with:
           name: failsafe-integration-test-results
@@ -159,9 +159,9 @@ jobs:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/testcontainers
-          key: ${{ runner.os }}-e2e-maven-${{ hashFiles('**/pom.xml') }}
+          key: e2e-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-e2e-maven-
+            e2e-maven-
 
       - run: chmod +x ./mvnw
 
@@ -176,7 +176,7 @@ jobs:
             sleep 1
           done
 
-      - run: ./mvnw verify -B -V -DskipTests -Dit.test=**/*E2ETest.java
+      - run: ./mvnw verify -B -V -Dit.test=**/*E2ETest.java
 
       - name: Upload Failsafe (E2E) results
         uses: actions/upload-artifact@v4
