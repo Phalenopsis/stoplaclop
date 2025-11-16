@@ -57,7 +57,7 @@ jobs:
         run: |
           TAG=${{ needs.build-and-push.outputs.tag }}
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
-            cd /home/${{ secrets.VPS_USER }}/stoplaclop/backend/$TAG
+            cd /home/${{ secrets.VPS_USER }}/stoplaclop/backend/
             docker compose pull
             docker compose down 
             docker compose up -d 
