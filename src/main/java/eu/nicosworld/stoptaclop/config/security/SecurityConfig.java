@@ -2,6 +2,7 @@ package eu.nicosworld.stoptaclop.config.security;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,6 +22,9 @@ import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 public class SecurityConfig {
+
+  @Value("${cors.allowedOrigins}")
+  private String clientUrl;
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
   private final CustomUserDetailService userDetailService;
@@ -53,7 +57,7 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration config = new CorsConfiguration();
-    config.setAllowedOrigins(List.of("http://localhost:5500")); // ton front
+    config.setAllowedOrigins(List.of(clientUrl)); // ton front
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("Content-Type", "Authorization"));
     config.setAllowCredentials(true);
