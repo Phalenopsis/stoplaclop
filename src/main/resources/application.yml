@@ -1,6 +1,6 @@
 spring:
   application:
-    name: authentication
+    name: stoplaclop
 
   datasource:
     url: jdbc:mysql://${DB_URI}:${DB_PORT}/${DB_NAME}?createDatabaseIfNotExist=true

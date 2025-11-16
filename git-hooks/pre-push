@@ -13,6 +13,13 @@ do
     echo "👉 Crée une branche de fonctionnalité, par ex : feat/ma-fonction"
     exit 1
   fi
+
+  # Vérifie le pattern de nommage
+  if ! [[ "$branch_name" =~ ^(feat|fix|hotfix)/.+$ ]]; then
+    echo "❌ Nom de branche invalide pour le push : '$branch_name'."
+    echo "👉 Seules les branches feat/, fix/, hotfix/ sont autorisées."
+    exit 1
+  fi
 done
 
 echo "✅ Vérification pre-push réussie : branche autorisée."

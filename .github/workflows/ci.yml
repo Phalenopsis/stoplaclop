@@ -6,10 +6,18 @@ on:
   pull_request:
     branches: ["main", "dev"]
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+env:
+  DB_URI: 127.0.0.1
+  DB_PORT: 3306
+  DB_NAME: testdb
+  DB_USER: testuser
+  DB_PASSWORD: testpass
+  JWT_SECRET: supersecretkeythatisatleast64charslong
+  CORS_WHITE_LIST: "*"
 
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
     services:
       mysql:
         image: mysql:8.0
@@ -26,44 +34,152 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
-    env:
-      DB_URI: 127.0.0.1
-      DB_PORT: 3306
-      DB_NAME: testdb
-      DB_USER: testuser
-      DB_PASSWORD: testpass
-      JWT_SECRET: supersecretkeythatisatleast64charslong
-      CORS_WHITE_LIST: "*"
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v3
+      - uses: actions/setup-java@v3
         with:
           java-version: 21
           distribution: temurin
 
-      - name: Cache Maven packages
-        uses: actions/cache@v3
+      - uses: actions/cache@v3
         with:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/testcontainers
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          key: unit-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-maven-
+            unit-maven-
 
-      - name: Make Maven wrapper executable
-        run: chmod +x ./mvnw
+      - run: chmod +x ./mvnw
 
-      - name: Build and run tests
-        run: ./mvnw clean verify -B -V
+      - name: Wait for MySQL
+        run: |
+          for i in {30..0}; do
+            if mysql -h $DB_URI -P $DB_PORT -u$DB_USER -p$DB_PASSWORD -e "SELECT 1" &> /dev/null; then
+              echo "MySQL ready"
+              break
+            fi
+            echo "Waiting for MySQL..."
+            sleep 1
+          done
 
-      - name: Upload test results
-        if: always()
+      - run: ./mvnw clean verify -B -V -DskipITs
+
+      - name: Upload Surefire (unit test) results
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: surefire-test-results
           path: target/surefire-reports
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v3
+        with:
+          java-version: 21
+          distribution: temurin
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/org/testcontainers
+          key: integration-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            integration-maven-
+
+      - run: chmod +x ./mvnw
+
+      - name: Wait for MySQL
+        run: |
+          for i in {30..0}; do
+            if mysql -h $DB_URI -P $DB_PORT -u$DB_USER -p$DB_PASSWORD -e "SELECT 1" &> /dev/null; then
+              echo "MySQL ready"
+              break
+            fi
+            echo "Waiting for MySQL..."
+            sleep 1
+          done
+
+      - run: ./mvnw clean verify -B -V -DskipUnitTests -DfailIfNoTests=false
+
+      - name: Upload Failsafe (integration test) results
+        uses: actions/upload-artifact@v4
+        with:
+          name: failsafe-integration-test-results
+          path: target/failsafe-reports
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v3
+        with:
+          java-version: 21
+          distribution: temurin
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/org/testcontainers
+          key: e2e-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            e2e-maven-
+
+      - run: chmod +x ./mvnw
+
+      - name: Wait for MySQL
+        run: |
+          for i in {30..0}; do
+            if mysql -h $DB_URI -P $DB_PORT -u$DB_USER -p$DB_PASSWORD -e "SELECT 1" &> /dev/null; then
+              echo "MySQL ready"
+              break
+            fi
+            echo "Waiting for MySQL..."
+            sleep 1
+          done
+
+      - run: ./mvnw verify -B -V -Dit.test=**/*E2ETest.java
+
+      - name: Upload Failsafe (E2E) results
+        uses: actions/upload-artifact@v4
+        with:
+          name: failsafe-e2e-test-results
+          path: target/failsafe-reports
