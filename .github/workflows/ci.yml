@@ -14,7 +14,6 @@ env:
   DB_PASSWORD: testpass
   JWT_SECRET: supersecretkeythatisatleast64charslong
   CORS_WHITE_LIST: "*"
-  MAVEN_CACHE_KEY: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
 
 jobs:
   unit-tests:
@@ -48,9 +47,9 @@ jobs:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/testcontainers
-          key: ${{ env.MAVEN_CACHE_KEY }}
+          key: ${{ runner.os }}-unit-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ env.MAVEN_CACHE_KEY }}
+            ${{ runner.os }}-unit-maven-
 
       - run: chmod +x ./mvnw
 
@@ -104,9 +103,9 @@ jobs:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/testcontainers
-          key: ${{ env.MAVEN_CACHE_KEY }}
+          key: ${{ runner.os }}-integration-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ env.MAVEN_CACHE_KEY }}
+            ${{ runner.os }}-integration-maven-
 
       - run: chmod +x ./mvnw
 
@@ -160,9 +159,9 @@ jobs:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/testcontainers
-          key: ${{ env.MAVEN_CACHE_KEY }}
+          key: ${{ runner.os }}-e2e-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ env.MAVEN_CACHE_KEY }}
+            ${{ runner.os }}-e2e-maven-
 
       - run: chmod +x ./mvnw
 
