@@ -23,7 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 @Configuration
 public class SecurityConfig {
 
-  @Value("${cors.allowedOrigins}")
+  @Value("${cors.allowed-origins}")
   private String clientUrl;
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
