@@ -1,0 +1,8 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update   # en prod, on ne fait pas de 'update', on valide seulement
+    show-sql: false         # désactive l'affichage SQL en prod
+    properties:
+      hibernate:
+        format_sql: false
