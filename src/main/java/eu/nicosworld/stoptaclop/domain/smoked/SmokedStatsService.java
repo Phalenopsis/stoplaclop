@@ -29,29 +29,31 @@ public class SmokedStatsService {
 
   public UserSmokedDto getUserSmokedStats(UserDetails userDetails) {
     // Récupérer l'AuthenticatedUser
-    AuthenticatedUser authUser = authenticatedUserService.findByUser(userDetails);
+    AuthenticatedUser user = authenticatedUserService.findByUser(userDetails);
+    LocalDateTime oneWeekAgo = LocalDateTime.now().minusDays(6);
+    List<SmokedCountByDay> smokedLastWeek = smokedRepository.countSmokedByDay(user, oneWeekAgo);
 
-    // Récupérer les stats pour la dernière semaine
-    LocalDateTime oneWeekAgo = LocalDateTime.now().minusDays(6); // incluant aujourd'hui
-    List<SmokedCountByDay> smokedLastWeek = smokedRepository.countSmokedByDay(authUser, oneWeekAgo);
+    int smokedToday = getSmokedToday(smokedLastWeek);
 
-    // Calculer smokedToday
-    int smokedToday =
-        (int)
-            smokedLastWeek.stream()
-                .filter(s -> s.getDay().isEqual(LocalDate.now()))
-                .mapToLong(SmokedCountByDay::getCount)
-                .sum();
+    LocalDate firstSmokedRecorded = getFirstSmokedRecorded(user);
 
-    // Calculer firstSmokedRecorded et totalSmoked
-    LocalDate firstSmokedRecorded =
-        authUser.getSmokedList().stream()
-            .map(smoked -> smoked.getDate().toLocalDate())
-            .min(LocalDate::compareTo)
-            .orElse(LocalDate.now());
-
-    int totalSmoked = authUser.getSmokedList().size();
+    int totalSmoked = user.getSmokedList().size();
 
     return new UserSmokedDto(smokedToday, smokedLastWeek, firstSmokedRecorded, totalSmoked);
+  }
+
+  static LocalDate getFirstSmokedRecorded(AuthenticatedUser user) {
+    return user.getSmokedList().stream()
+        .map(smoked -> smoked.getDate().toLocalDate())
+        .min(LocalDate::compareTo)
+        .orElse(null);
+  }
+
+  static int getSmokedToday(List<SmokedCountByDay> smokedLastWeek) {
+    return (int)
+        smokedLastWeek.stream()
+            .filter(s -> s.getDay().isEqual(LocalDate.now()))
+            .mapToLong(SmokedCountByDay::getCount)
+            .sum();
   }
 }
