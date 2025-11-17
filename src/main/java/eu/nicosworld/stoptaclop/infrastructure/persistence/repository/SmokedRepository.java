@@ -19,6 +19,9 @@ public interface SmokedRepository extends JpaRepository<Smoked, Long> {
   @Query("SELECT MIN(s.date) FROM Smoked s WHERE s.user = :user")
   LocalDateTime findFirstDateByUser(@Param("user") AuthenticatedUser user);
 
+  @Query("SELECT MAX(s.date) FROM Smoked s WHERE s.user = :user")
+  LocalDateTime findLastSmokedDate(@Param("user") AuthenticatedUser user);
+
   @Query(
       "SELECT new eu.nicosworld.stoptaclop.infrastructure.web.dto.SmokedCountByDay("
           + "CAST(s.date AS java.time.LocalDate), COUNT(s)) "
