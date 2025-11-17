@@ -39,7 +39,10 @@ public class SmokedStatsService {
 
     int totalSmoked = user.getSmokedList().size();
 
-    return new UserSmokedDto(smokedToday, smokedLastWeek, firstSmokedRecorded, totalSmoked);
+    LocalDateTime lastCigaretteSmoked = smokedRepository.findLastSmokedDate(user);
+
+    return new UserSmokedDto(
+        smokedToday, smokedLastWeek, firstSmokedRecorded, totalSmoked, lastCigaretteSmoked);
   }
 
   static LocalDate getFirstSmokedRecorded(AuthenticatedUser user) {

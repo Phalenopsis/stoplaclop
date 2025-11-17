@@ -64,6 +64,10 @@ class SmokedStatsServiceTest {
     when(smokedRepository.countSmokedByDay(eq(user), any(LocalDateTime.class)))
         .thenReturn(lastWeekStats);
 
+    // Last smoked date for new field
+    LocalDateTime lastSmoked = LocalDateTime.now().minusHours(3);
+    when(smokedRepository.findLastSmokedDate(user)).thenReturn(lastSmoked);
+
     // --- WHEN ---
     UserSmokedDto dto = service.getUserSmokedStats(userDetails);
 
@@ -72,6 +76,7 @@ class SmokedStatsServiceTest {
     assertThat(dto.smokedLastWeek()).containsExactlyElementsOf(lastWeekStats);
     assertThat(dto.totalSmoked()).isEqualTo(3);
     assertThat(dto.firstSmokedRecorded()).isEqualTo(LocalDate.parse("2024-01-10"));
+    assertThat(dto.lastSmokedRecorded()).isEqualTo(lastSmoked);
   }
 
   // Utilitaire pour créer un Smoked avec une date simple
