@@ -42,7 +42,12 @@ public class SmokedStatsService {
     LocalDateTime lastCigaretteSmoked = smokedRepository.findLastSmokedDate(user);
 
     return new UserSmokedDto(
-        smokedToday, smokedLastWeek, firstSmokedRecorded, totalSmoked, lastCigaretteSmoked);
+        smokedToday,
+        smokedLastWeek,
+        firstSmokedRecorded,
+        totalSmoked,
+        lastCigaretteSmoked,
+        LocalDateTime.now());
   }
 
   static LocalDate getFirstSmokedRecorded(AuthenticatedUser user) {

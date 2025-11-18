@@ -18,4 +18,5 @@ public record UserSmokedDto(
     List<SmokedCountByDay> smokedLastWeek,
     LocalDate firstSmokedRecorded,
     int totalSmoked,
-    LocalDateTime lastSmokedRecorded) {}
+    LocalDateTime lastSmokedRecorded,
+    LocalDateTime now) {}
