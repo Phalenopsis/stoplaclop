@@ -3,6 +3,7 @@ package eu.nicosworld.stoptaclop.infrastructure.web.controller;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.*;
@@ -17,6 +18,7 @@ import eu.nicosworld.stoptaclop.domain.authenticatedUser.AuthenticatedUserServic
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.AuthenticatedUser;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.Smoked;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
+import eu.nicosworld.stoptaclop.infrastructure.web.dto.UserSmokingStatsDto;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 
@@ -32,14 +34,11 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
   private String testEmail;
   private final String testPassword = "password123";
 
-  /** Génère un email unique pour chaque test */
   private String generateRandomEmail() {
     return "test+" + System.currentTimeMillis() + "@example.com";
   }
 
-  /** Inscription + login → retourne accessToken */
   private String getAccessToken(String email, String password) {
-    // Inscription
     UserRegistrationDTO registrationDto = new UserRegistrationDTO();
     registrationDto.setEmail(email);
     registrationDto.setPassword(password);
@@ -52,7 +51,6 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
         .then()
         .statusCode(201);
 
-    // Login
     UserLoginDTO loginDto = new UserLoginDTO();
     loginDto.setEmail(email);
     loginDto.setPassword(password);
@@ -68,7 +66,6 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
         .path("accessToken");
   }
 
-  /** Avant chaque test : vide la base et crée un utilisateur */
   @BeforeEach
   void setup() {
     smokedRepository.deleteAll();
@@ -76,14 +73,10 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
     token = getAccessToken(testEmail, testPassword);
   }
 
-  /** Retourne un RequestSpecification avec le token déjà appliqué */
   private RequestSpecification auth() {
     return given().header("Authorization", "Bearer " + token);
   }
 
-  // -------------------------------------------------------
-  //             Tests pour utilisateur authentifié
-  // -------------------------------------------------------
   @Nested
   @DisplayName("Quand l'utilisateur est authentifié")
   class AuthenticatedTests {
@@ -91,51 +84,84 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
     @Test
     @DisplayName("GET /smoked retourne les stats initiales")
     void getSmoked_initialStats() {
-      auth()
-          .when()
-          .get("/smoked")
-          .then()
-          .statusCode(200)
-          .body("smokedToday", equalTo(0))
-          .body("totalSmoked", equalTo(0))
-          .body("smokedLastWeek", hasSize(0));
+      UserSmokingStatsDto dto =
+          auth()
+              .when()
+              .get("/smoked")
+              .then()
+              .statusCode(200)
+              .extract()
+              .as(UserSmokingStatsDto.class);
+
+      Assertions.assertEquals(0, dto.stats().smokedToday());
+      Assertions.assertTrue(dto.stats().smokedLastWeek().isEmpty());
+      Assertions.assertEquals(12.5, dto.financial().savedMoney());
+      Assertions.assertEquals(0.0, dto.financial().burnedMoney());
+      Assertions.assertNull(dto.stats().minutesSinceLastSmoked());
     }
 
     @Test
     @DisplayName("POST /smoked enregistre une cigarette")
     void smokeOnce_updatesStats() {
-      auth()
-          .when()
-          .post("/smoked")
-          .then()
-          .statusCode(200)
-          .body("smokedToday", equalTo(1))
-          .body("totalSmoked", equalTo(1))
-          .body("smokedLastWeek", hasSize(1));
+      auth().when().post("/smoked").then().statusCode(200);
+
+      UserSmokingStatsDto dto =
+          auth()
+              .when()
+              .get("/smoked")
+              .then()
+              .statusCode(200)
+              .extract()
+              .as(UserSmokingStatsDto.class);
+
+      Assertions.assertEquals(1, dto.stats().smokedToday());
+      Assertions.assertEquals(1, dto.stats().smokedLastWeek().size());
+      Assertions.assertTrue(dto.financial().savedMoney() >= 0);
+      Assertions.assertTrue(dto.financial().burnedMoney() >= 0);
+      Assertions.assertTrue(dto.stats().minutesSinceLastSmoked() >= 0);
     }
 
     @Test
-    @DisplayName("POST /smoked x3 incrémente correctement le total")
-    void smokeThreeTimes() {
+    @DisplayName("POST /smoked x3 incrémente correctement le total et calcule bien les stats")
+    void smokeThreeTimes_robust() {
       User user = userRepository.findByEmail(testEmail).orElseThrow();
       AuthenticatedUser authenticatedUser = authenticatedUserService.findByUser(user);
 
-      // Historique en base : 1 cigarette hier et 1 il y a 1h
-      smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusHours(1)));
+      // Historique : 1 cigarette hier, 1 il y a 2 heures
       smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusDays(1)));
+      smokedRepository.save(new Smoked(authenticatedUser, LocalDateTime.now().minusHours(2)));
 
-      auth()
-          .when()
-          .post("/smoked")
-          .then()
-          .statusCode(200)
-          .body("smokedToday", equalTo(2))
-          .body("totalSmoked", equalTo(3))
-          .body(
-              "smokedLastWeek.day",
-              containsInAnyOrder(
-                  LocalDateTime.now().minusDays(1).toLocalDate().toString(),
-                  LocalDateTime.now().toLocalDate().toString()));
+      // Smoke aujourd'hui via POST
+      auth().when().post("/smoked").then().statusCode(200);
+
+      UserSmokingStatsDto dto =
+          auth()
+              .when()
+              .get("/smoked")
+              .then()
+              .statusCode(200)
+              .extract()
+              .as(UserSmokingStatsDto.class);
+
+      // smokedToday = 2 (1 cigarette il y a 2h + 1 maintenant)
+      Assertions.assertEquals(2, dto.stats().smokedToday());
+
+      // smokedLastWeek contient exactly 2 jours : yesterday et today
+      Assertions.assertEquals(2, dto.stats().smokedLastWeek().size());
+      Assertions.assertTrue(
+          dto.stats().smokedLastWeek().stream()
+              .anyMatch(s -> s.getDay().equals(LocalDate.now()) && s.getCount() == 2));
+      Assertions.assertTrue(
+          dto.stats().smokedLastWeek().stream()
+              .anyMatch(s -> s.getDay().equals(LocalDate.now().minusDays(1)) && s.getCount() == 1));
+
+      // minutesSinceLastSmoked corresponds à la cigarette la plus récente
+      long minutesSinceLast = dto.stats().minutesSinceLastSmoked();
+      Assertions.assertTrue(minutesSinceLast >= 0 && minutesSinceLast < 2);
+
+      // Vérifier que les stats financières sont positives
+      Assertions.assertTrue(dto.financial().savedMoney() >= 0);
+      Assertions.assertTrue(dto.financial().burnedMoney() >= 0);
     }
 
     @Test
@@ -152,9 +178,6 @@ class SmokedControllerE2ETest extends AbstractE2ETest {
     }
   }
 
-  // -------------------------------------------------------
-  //             Tests pour utilisateur non authentifié
-  // -------------------------------------------------------
   @Nested
   @DisplayName("Quand l'utilisateur n'est pas authentifié")
   class UnauthorizedTests {
