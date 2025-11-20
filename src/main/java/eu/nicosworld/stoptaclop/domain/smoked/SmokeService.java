@@ -17,6 +17,7 @@ public class SmokeService {
   private final AuthenticatedUserService authenticatedUserService;
   private final SmokedRepository smokeRepository;
 
+  /** Used when a user smoke a cigarette */
   public SmokeService(
       AuthenticatedUserService authenticatedUserService, SmokedRepository smokeRepository) {
     this.authenticatedUserService = authenticatedUserService;
@@ -26,11 +27,7 @@ public class SmokeService {
   public void smokeACigarette(UserDetails user) {
     AuthenticatedUser authenticatedUser = authenticatedUserService.findByUser(user);
 
-    LocalDateTime lastSmokeDate =
-        smokeRepository
-            .findTopByUserOrderByDateDesc(authenticatedUser)
-            .map(Smoked::getDate)
-            .orElse(null);
+    LocalDateTime lastSmokeDate = smokeRepository.findLastSmokedDate(authenticatedUser);
 
     if (lastSmokeDate != null) {
       Duration sinceLastSmoke = Duration.between(lastSmokeDate, LocalDateTime.now());

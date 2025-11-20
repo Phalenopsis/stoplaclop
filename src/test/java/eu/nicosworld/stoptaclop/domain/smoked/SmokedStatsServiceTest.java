@@ -1,136 +1,157 @@
 package eu.nicosworld.stoptaclop.domain.smoked;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Stream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.MockitoAnnotations;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import eu.nicosworld.stoptaclop.domain.authenticatedUser.AuthenticatedUserService;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.AuthenticatedUser;
-import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.Smoked;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
 import eu.nicosworld.stoptaclop.infrastructure.web.dto.SmokedCountByDay;
-import eu.nicosworld.stoptaclop.infrastructure.web.dto.UserSmokedDto;
+import eu.nicosworld.stoptaclop.infrastructure.web.dto.UserSmokingStatsDto;
 
-@ExtendWith(MockitoExtension.class)
 class SmokedStatsServiceTest {
 
   @Mock private SmokedRepository smokedRepository;
 
   @Mock private AuthenticatedUserService authenticatedUserService;
 
-  @Mock private UserDetails userDetails;
+  @InjectMocks private SmokedStatsService smokedStatsService;
 
-  private SmokedStatsService service;
+  private AutoCloseable mocks;
 
   @BeforeEach
-  void setup() {
-    service = new SmokedStatsService(smokedRepository, authenticatedUserService);
+  void setUp() {
+    mocks = MockitoAnnotations.openMocks(this);
   }
 
-  @Test
-  void testGetUserSmokedStats() {
-    // --- GIVEN ---
-    AuthenticatedUser user = new AuthenticatedUser();
-
-    // Simule une liste d'évènements Smoked dans l'entité User
-    user.setSmokedList(
-        List.of(smokedAt("2024-01-10"), smokedAt("2024-01-11"), smokedAt("2024-01-12")));
-
-    when(authenticatedUserService.findByUser(userDetails)).thenReturn(user);
-
-    LocalDate today = LocalDate.now();
-
-    // Stats pour la semaine (utilisées par le repo)
-    List<SmokedCountByDay> lastWeekStats =
-        List.of(
-            new SmokedCountByDay(today.minusDays(1), 3L),
-            new SmokedCountByDay(today, 5L) // smokedToday = 5
-            );
-
-    when(smokedRepository.countSmokedByDay(eq(user), any(LocalDateTime.class)))
-        .thenReturn(lastWeekStats);
-
-    // Last smoked date for new field
-    LocalDateTime lastSmoked = LocalDateTime.now().minusHours(3);
-    when(smokedRepository.findLastSmokedDate(user)).thenReturn(lastSmoked);
-
-    // --- WHEN ---
-    UserSmokedDto dto = service.getUserSmokedStats(userDetails);
-
-    // --- THEN ---
-    assertThat(dto.smokedToday()).isEqualTo(5);
-    assertThat(dto.smokedLastWeek()).containsExactlyElementsOf(lastWeekStats);
-    assertThat(dto.totalSmoked()).isEqualTo(3);
-    assertThat(dto.firstSmokedRecorded()).isEqualTo(LocalDate.parse("2024-01-10"));
-    assertThat(dto.lastSmokedRecorded()).isEqualTo(lastSmoked);
+  @AfterEach
+  void tearDown() throws Exception {
+    mocks.close();
   }
 
-  // Utilitaire pour créer un Smoked avec une date simple
-  private static Smoked smokedAt(String date) {
-    Smoked s = new Smoked();
-    s.setDate(LocalDate.parse(date).atStartOfDay());
-    return s;
+  private AuthenticatedUser mockUser() {
+    return new AuthenticatedUser();
   }
 
-  @ParameterizedTest(name = "{0}")
-  @MethodSource("smokedTodayProvider")
-  void testGetSmokedToday(String description, List<SmokedCountByDay> input, int expected) {
-    int result = SmokedStatsService.getSmokedToday(input);
-    assertThat(result).isEqualTo(expected);
+  private UserDetails mockUserDetails() {
+    return mock(UserDetails.class);
   }
 
-  private static Stream<Arguments> smokedTodayProvider() {
-    LocalDate today = LocalDate.now();
+  @Nested
+  @DisplayName("Financial stats tests")
+  class FinancialStats {
 
-    return Stream.of(
-        Arguments.of(
-            "Returns smoked count for today when there is one entry per day",
-            List.of(new SmokedCountByDay(today, 3L), new SmokedCountByDay(today.minusDays(1), 2L)),
-            3),
-        Arguments.of(
-            "Sums multiple entries for today",
-            List.of(new SmokedCountByDay(today, 5L), new SmokedCountByDay(today, 2L)),
-            7),
-        Arguments.of(
-            "No entry for today returns 0",
-            List.of(new SmokedCountByDay(today.minusDays(2), 4L)),
-            0),
-        Arguments.of("Empty list returns 0", List.of(), 0));
+    @Test
+    @DisplayName("Saved and burned money calculation")
+    void testSavedAndBurnedMoney() {
+      AuthenticatedUser user = mockUser();
+      UserDetails userDetails = mockUserDetails();
+      when(authenticatedUserService.findByUser(userDetails)).thenReturn(user);
+
+      LocalDateTime now = LocalDateTime.now();
+      LocalDate firstSmoked = LocalDate.now().minusDays(4);
+
+      when(smokedRepository.countTotalSmokedByUser(user)).thenReturn(60L);
+      when(smokedRepository.findFirstSmokedDate(user)).thenReturn(firstSmoked.atStartOfDay());
+      when(smokedRepository.countSmokedByDay(eq(user), any())).thenReturn(List.of());
+      when(smokedRepository.findLastSmokedDate(user)).thenReturn(now.minusMinutes(30));
+
+      UserSmokingStatsDto dto = smokedStatsService.getUserSmokingStats(userDetails);
+
+      double savedMoney = dto.financial().savedMoney();
+      double burnedMoney = dto.financial().burnedMoney();
+
+      assert (savedMoney >= 0);
+      assert (burnedMoney >= 0);
+    }
   }
 
-  @ParameterizedTest(name = "{0}")
-  @MethodSource("firstSmokedProvider")
-  void testGetFirstSmokedRecorded(String description, List<String> dates, LocalDate expected) {
-    AuthenticatedUser user = new AuthenticatedUser();
-    user.setSmokedList(dates.stream().map(SmokedStatsServiceTest::smokedAt).toList());
+  @Nested
+  @DisplayName("Behavioral stats tests")
+  class BehavioralStats {
 
-    LocalDate result = SmokedStatsService.getFirstSmokedRecorded(user);
+    @Test
+    @DisplayName("Minutes since last smoked")
+    void testMinutesSinceLastSmoked() {
+      AuthenticatedUser user = mockUser();
+      UserDetails userDetails = mockUserDetails();
+      when(authenticatedUserService.findByUser(userDetails)).thenReturn(user);
 
-    assertThat(result).isEqualTo(expected);
-  }
+      LocalDateTime now = LocalDateTime.now();
+      LocalDate firstSmoked = LocalDate.now().minusDays(4);
 
-  private static Stream<Arguments> firstSmokedProvider() {
-    return Stream.of(
-        Arguments.of(
-            "Returns earliest date among several entries",
-            List.of("2024-01-10", "2024-01-12", "2024-01-11"),
-            LocalDate.parse("2024-01-10")),
-        Arguments.of(
-            "Single entry returns that date", List.of("2024-02-01"), LocalDate.parse("2024-02-01")),
-        Arguments.of("Empty list returns null", List.of(), null));
+      when(smokedRepository.countTotalSmokedByUser(user)).thenReturn(40L);
+      when(smokedRepository.findFirstSmokedDate(user)).thenReturn(firstSmoked.atStartOfDay());
+      when(smokedRepository.findLastSmokedDate(user)).thenReturn(now.minusMinutes(90));
+
+      when(smokedRepository.countSmokedByDay(eq(user), any()))
+          .thenReturn(
+              List.of(
+                  new SmokedCountByDay(LocalDate.now(), 5L),
+                  new SmokedCountByDay(LocalDate.now().minusDays(1), 10L)));
+
+      UserSmokingStatsDto dto = smokedStatsService.getUserSmokingStats(userDetails);
+
+      assertEquals(5, dto.stats().smokedToday());
+      assert (dto.stats().minutesSinceLastSmoked() >= 89
+          && dto.stats().minutesSinceLastSmoked() <= 91);
+    }
+
+    @Test
+    @DisplayName("Smoked last week mapping")
+    void testSmokedLastWeekMapping() {
+      AuthenticatedUser user = mockUser();
+      UserDetails userDetails = mockUserDetails();
+      when(authenticatedUserService.findByUser(userDetails)).thenReturn(user);
+
+      LocalDateTime now = LocalDateTime.now();
+      LocalDate firstSmoked = LocalDate.now().minusDays(6);
+
+      when(smokedRepository.countTotalSmokedByUser(user)).thenReturn(50L);
+      when(smokedRepository.findFirstSmokedDate(user)).thenReturn(firstSmoked.atStartOfDay());
+      when(smokedRepository.findLastSmokedDate(user)).thenReturn(now.minusMinutes(45));
+
+      when(smokedRepository.countSmokedByDay(eq(user), any()))
+          .thenReturn(
+              List.of(
+                  new SmokedCountByDay(LocalDate.now(), 2L),
+                  new SmokedCountByDay(LocalDate.now().minusDays(1), 3L),
+                  new SmokedCountByDay(LocalDate.now().minusDays(2), 4L)));
+
+      UserSmokingStatsDto dto = smokedStatsService.getUserSmokingStats(userDetails);
+
+      List<SmokedCountByDay> week = dto.stats().smokedLastWeek();
+
+      SmokedCountByDay today =
+          week.stream().filter(s -> s.getDay().isEqual(LocalDate.now())).findFirst().orElseThrow();
+      SmokedCountByDay yesterday =
+          week.stream()
+              .filter(s -> s.getDay().isEqual(LocalDate.now().minusDays(1)))
+              .findFirst()
+              .orElseThrow();
+      SmokedCountByDay twoDaysAgo =
+          week.stream()
+              .filter(s -> s.getDay().isEqual(LocalDate.now().minusDays(2)))
+              .findFirst()
+              .orElseThrow();
+
+      assertEquals(2L, today.getCount());
+      assertEquals(3L, yesterday.getCount());
+      assertEquals(4L, twoDaysAgo.getCount());
+    }
   }
 }

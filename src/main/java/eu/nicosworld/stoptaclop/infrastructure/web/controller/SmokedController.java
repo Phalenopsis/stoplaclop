@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import eu.nicosworld.stoptaclop.domain.smoked.SmokeService;
 import eu.nicosworld.stoptaclop.domain.smoked.SmokedStatsService;
-import eu.nicosworld.stoptaclop.infrastructure.web.dto.UserSmokedDto;
+import eu.nicosworld.stoptaclop.infrastructure.web.dto.UserSmokingStatsDto;
 
 @RestController
 @RequestMapping("smoked")
@@ -24,13 +24,13 @@ public class SmokedController {
   }
 
   @GetMapping
-  public UserSmokedDto getSmoked(@AuthenticationPrincipal UserDetails userDetails) {
-    return this.statsService.getUserSmokedStats(userDetails);
+  public UserSmokingStatsDto getSmoked(@AuthenticationPrincipal UserDetails userDetails) {
+    return this.statsService.getUserSmokingStats(userDetails);
   }
 
   @PostMapping
-  public UserSmokedDto smokeCigarette(@AuthenticationPrincipal UserDetails userDetails) {
+  public UserSmokingStatsDto smokeCigarette(@AuthenticationPrincipal UserDetails userDetails) {
     this.smokeService.smokeACigarette(userDetails);
-    return this.statsService.getUserSmokedStats(userDetails);
+    return this.statsService.getUserSmokingStats(userDetails);
   }
 }
