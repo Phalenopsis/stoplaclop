@@ -1,6 +1,5 @@
 package eu.nicosworld.stoptaclop.domain.smoked;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -9,10 +8,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import eu.nicosworld.stoptaclop.domain.authenticatedUser.AuthenticatedUserService;
+import eu.nicosworld.stoptaclop.domain.saving.Saving;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.entity.AuthenticatedUser;
 import eu.nicosworld.stoptaclop.infrastructure.persistence.repository.SmokedRepository;
 import eu.nicosworld.stoptaclop.infrastructure.web.dto.SmokedCountByDay;
-import eu.nicosworld.stoptaclop.infrastructure.web.dto.UserSmokedDto;
+import eu.nicosworld.stoptaclop.infrastructure.web.dto.UserSmokingStatsDto;
 
 @Service
 @Transactional(readOnly = true)
@@ -27,41 +27,28 @@ public class SmokedStatsService {
     this.authenticatedUserService = authenticatedUserService;
   }
 
-  public UserSmokedDto getUserSmokedStats(UserDetails userDetails) {
-    // Récupérer l'AuthenticatedUser
+  public UserSmokingStatsDto getUserSmokingStats(UserDetails userDetails) {
     AuthenticatedUser user = authenticatedUserService.findByUser(userDetails);
-    LocalDateTime oneWeekAgo = LocalDateTime.now().minusDays(6);
+
+    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime oneWeekAgo = now.minusDays(6);
+
+    // Récupération des stats de la semaine
     List<SmokedCountByDay> smokedLastWeek = smokedRepository.countSmokedByDay(user, oneWeekAgo);
 
-    int smokedToday = getSmokedToday(smokedLastWeek);
+    LocalDateTime lastSmokedDate = smokedRepository.findLastSmokedDate(user);
+    LocalDateTime firstSmokedDate = smokedRepository.findFirstSmokedDate(user);
 
-    LocalDate firstSmokedRecorded = getFirstSmokedRecorded(user);
+    // Nombre total et première cigarette
+    Long totalSmoked = smokedRepository.countTotalSmokedByUser(user);
+    Long totalCigarettesSmoked = totalSmoked != null ? totalSmoked : 0L;
 
-    int totalSmoked = user.getSmokedList().size();
+    Saving saving =
+        new Saving(
+            totalCigarettesSmoked,
+            firstSmokedDate != null ? firstSmokedDate.toLocalDate() : now.toLocalDate());
 
-    LocalDateTime lastCigaretteSmoked = smokedRepository.findLastSmokedDate(user);
-
-    return new UserSmokedDto(
-        smokedToday,
-        smokedLastWeek,
-        firstSmokedRecorded,
-        totalSmoked,
-        lastCigaretteSmoked,
-        LocalDateTime.now());
-  }
-
-  static LocalDate getFirstSmokedRecorded(AuthenticatedUser user) {
-    return user.getSmokedList().stream()
-        .map(smoked -> smoked.getDate().toLocalDate())
-        .min(LocalDate::compareTo)
-        .orElse(null);
-  }
-
-  static int getSmokedToday(List<SmokedCountByDay> smokedLastWeek) {
-    return (int)
-        smokedLastWeek.stream()
-            .filter(s -> s.getDay().isEqual(LocalDate.now()))
-            .mapToLong(SmokedCountByDay::getCount)
-            .sum();
+    // Mapper final
+    return UserSmokingStatsMapper.mapToDto(saving, user, smokedLastWeek, lastSmokedDate);
   }
 }
