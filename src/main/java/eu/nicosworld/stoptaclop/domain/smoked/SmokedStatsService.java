@@ -1,5 +1,6 @@
 package eu.nicosworld.stoptaclop.domain.smoked;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -31,10 +32,11 @@ public class SmokedStatsService {
     AuthenticatedUser user = authenticatedUserService.findByUser(userDetails);
 
     LocalDateTime now = LocalDateTime.now();
-    LocalDateTime oneWeekAgo = now.minusDays(6);
+    LocalDate oneWeekAgo = LocalDate.now().minusDays(6);
 
     // Récupération des stats de la semaine
-    List<SmokedCountByDay> smokedLastWeek = smokedRepository.countSmokedByDay(user, oneWeekAgo);
+    List<SmokedCountByDay> smokedLastWeek =
+        smokedRepository.countSmokedByDay(user, oneWeekAgo.atStartOfDay());
 
     LocalDateTime lastSmokedDate = smokedRepository.findLastSmokedDate(user);
     LocalDateTime firstSmokedDate = smokedRepository.findFirstSmokedDate(user);
