@@ -52,10 +52,16 @@ class AuthControllerE2ETest extends AbstractE2ETest {
           .response();
     }
 
+    /** Register + login et retourne le refresh token sous forme de cookie "refreshToken=value" */
     static String registerAndLoginGetRefreshCookie(String email, String password) {
       registerUser(email, password);
       Response loginResponse = loginUser(email, password);
-      return loginResponse.getHeader("Set-Cookie");
+
+      String refreshToken = loginResponse.getCookie("refreshToken");
+      if (refreshToken == null || refreshToken.isEmpty()) {
+        throw new IllegalStateException("Refresh token non reçu après login");
+      }
+      return "refreshToken=" + refreshToken;
     }
 
     static void assertRegisterFails(
@@ -115,8 +121,6 @@ class AuthControllerE2ETest extends AbstractE2ETest {
       String password = "password123";
 
       UserTestHelper.registerUser(email, password);
-
-      // Test paramétrable
       UserTestHelper.assertRegisterFails(email, password, 400, "Cet email est déjà utilisé.");
     }
   }
@@ -135,8 +139,6 @@ class AuthControllerE2ETest extends AbstractE2ETest {
       String password = "password123";
 
       String refreshCookie = UserTestHelper.registerAndLoginGetRefreshCookie(email, password);
-
-      // Vérifier que cookie contient refreshToken
       assert refreshCookie.contains("refreshToken=");
     }
 
@@ -147,7 +149,6 @@ class AuthControllerE2ETest extends AbstractE2ETest {
       String password = "password123";
 
       UserTestHelper.registerUser(email, password);
-
       UserTestHelper.assertLoginFails(
           email, "wrongpassword", 401, "Email ou mot de passe incorrect.");
     }
@@ -184,6 +185,58 @@ class AuthControllerE2ETest extends AbstractE2ETest {
     }
 
     @Test
+    @DisplayName("POST /auth/refresh - remplace l'ancien refresh token")
+    void refresh_shouldReplaceRefreshTokenCookie() {
+      String oldCookie =
+          UserTestHelper.registerAndLoginGetRefreshCookie("replaceuser@example.com", "password123");
+
+      Response response =
+          given()
+              .contentType(ContentType.JSON)
+              .header("Cookie", oldCookie)
+              .when()
+              .post("/auth/refresh")
+              .then()
+              .statusCode(200)
+              .body("accessToken", notNullValue())
+              .extract()
+              .response();
+
+      String newCookieHeader = response.getHeader("Set-Cookie");
+      assert newCookieHeader != null;
+      assert !newCookieHeader.equals(oldCookie);
+      assert newCookieHeader.contains("refreshToken=");
+    }
+
+    @Test
+    @DisplayName("POST /auth/refresh - nouvel access token utilisable")
+    void refresh_newAccessTokenShouldBeValid() {
+      String cookie =
+          UserTestHelper.registerAndLoginGetRefreshCookie("validuser@example.com", "password123");
+
+      Response refreshResponse =
+          given()
+              .contentType(ContentType.JSON)
+              .header("Cookie", cookie)
+              .when()
+              .post("/auth/refresh")
+              .then()
+              .statusCode(200)
+              .body("accessToken", notNullValue())
+              .extract()
+              .response();
+
+      String newAccessToken = refreshResponse.jsonPath().getString("accessToken");
+
+      given()
+          .header("Authorization", "Bearer " + newAccessToken)
+          .when()
+          .get("/smoked")
+          .then()
+          .statusCode(200);
+    }
+
+    @Test
     @DisplayName("POST /auth/refresh - sans cookie renvoie 401")
     void refresh_withoutCookie_shouldReturnUnauthorized() {
       given().contentType(ContentType.JSON).when().post("/auth/refresh").then().statusCode(401);
@@ -199,6 +252,64 @@ class AuthControllerE2ETest extends AbstractE2ETest {
           .post("/auth/refresh")
           .then()
           .statusCode(401);
+    }
+
+    @Test
+    @DisplayName("E2E - workflow complet: login → access token expiré → refresh → accès protégé")
+    void e2e_refreshTokenWorkflow() {
+      String email = "workflowuser@example.com";
+      String password = "password123";
+
+      // 1️⃣ Register & login
+      String loginCookie = UserTestHelper.registerAndLoginGetRefreshCookie(email, password);
+      Response loginResponse = UserTestHelper.loginUser(email, password);
+      String accessToken = loginResponse.jsonPath().getString("accessToken");
+
+      // 2️⃣ Accès à route protégée avec access token valide
+      given()
+          .header("Authorization", "Bearer " + accessToken)
+          .when()
+          .get("/smoked")
+          .then()
+          .statusCode(200);
+
+      // 3️⃣ Simuler token expiré pour test d’accès protégé
+      String expiredAccessToken = "invalid-or-expired-token";
+      given()
+          .header("Authorization", "Bearer " + expiredAccessToken)
+          .when()
+          .get("/smoked")
+          .then()
+          .statusCode(401);
+
+      // 4️⃣ Refresh token
+      Response refreshResponse =
+          given()
+              .contentType(ContentType.JSON)
+              .header("Cookie", loginCookie)
+              .when()
+              .post("/auth/refresh")
+              .then()
+              .statusCode(200)
+              .body("accessToken", notNullValue())
+              .extract()
+              .response();
+
+      String newAccessToken = refreshResponse.jsonPath().getString("accessToken");
+      String newCookieHeader = refreshResponse.getHeader("Set-Cookie");
+
+      // 5️⃣ Vérifier nouvel access token fonctionne
+      given()
+          .header("Authorization", "Bearer " + newAccessToken)
+          .when()
+          .get("/smoked")
+          .then()
+          .statusCode(200);
+
+      // 6️⃣ Vérifier que le cookie a été remplacé
+      assert newCookieHeader != null;
+      assert !newCookieHeader.equals(loginCookie);
+      assert newCookieHeader.contains("refreshToken=");
     }
   }
 }

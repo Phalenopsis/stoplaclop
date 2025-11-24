@@ -104,7 +104,7 @@ public class AuthController {
             .httpOnly(true)
             .secure(true)
             .path("/auth/refresh")
-            .sameSite("Strict")
+            .sameSite("None")
             .maxAge(maxAge)
             .build();
     return cookie;
